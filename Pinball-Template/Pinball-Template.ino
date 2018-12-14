@@ -79,6 +79,20 @@ long lostBallInterval = 2000; //2 secs?
 
 Servo gateServo;
 
+#ifdef USE_COIN_SLOT
+
+
+#else
+
+ //we will have the return plugged into the interrupt pin, so we refine the pins below
+
+  #define COIN_SLOT A1
+
+  //this is the pin that is used to detect the return at the bottom of the machine.
+  #define RETURN_PIN    3
+
+#endif
+
 void setup() {
   
   Serial.begin(9600);
@@ -152,13 +166,6 @@ void gameLoop(){
 
     //check inputs, add to score
     
-    /*if(digitalRead(BUMPER_PIN) == HIGH){
-      if(currentMillis - prevScoreMillis > 50) {  //50ms delay between scoring ops
-        prevScoreMillis = currentMillis;
-        //currentScore += 1;
-      }
-    }*/
-
     if(gameMode == SCORE_SOUND_MODE){
         Serial.println("Scoring");
         if(currentMillis - prevScoreMillis > 50) {  //50ms delay between scoring ops
@@ -238,36 +245,59 @@ void setupGame()
 
   //attach interrupts
   attachInterrupt(digitalPinToInterrupt(SCORE_1_PIN), ScoreSlot1, CHANGE);
+  #ifdef USE_COIN_SLOT
   attachInterrupt(digitalPinToInterrupt(COIN_SLOT), CoinSlot, RISING);
+  #else
+  //we need to plug the return into the coin slot PCB JST header for this to work
+  attachInterrupt(digitalPinToInterrupt(COIN_SLOT), ReturnWatch, RISING);
+  #endif
 
+}
+
+void ReturnWatch()
+{
+  if(currentMillis - previousBallLostMillis > lostBallInterval) 
+  {
+          // save the last time you lost the ball 
+          previousBallLostMillis = currentMillis;   
+ 
+          lostBallCount++;
+          //make a sound
+          BallLossBeep();
+
+          if(lostBallCount == BALLS_GIVEN_PER_GAME){
+           gameOver();
+          }
+  }
+  
 }
 
 
 void showLEDAttraction(){
-  //make the LED's scroll something LedControl
-  //make some noise?
 
-  //always be checking for the coin slot, then
-  //we can transition to the game play mode.
-
-  if(resetButton.isPressed()){
-
-      //check to see how long the button has been pressed, clear the high score.
-      
-  }
-  writeArduinoOn7Segment();
-  StarWarsFirstSection();
-  StarWarsSecondSection();
+  while(gameMode == ATTRACT_MODE)
+  {
+    //always be checking for the coin slot, then
+    //we can transition to the game play mode.
   
-  //scrollDigits();
-  //check to see if a coin has been added to the slot?
-  if(digitalRead(COIN_SLOT) == HIGH){
-    gameMode = PLAY_MODE;
+    if(resetButton.isPressed()){
+  
+        //check to see how long the button has been pressed, clear the high score.
+        
+    }
+    writeArduinoOn7Segment();
+    //StarWarsFirstSection();
+    //StarWarsSecondSection();
+    Play_HB();
     
+    //scrollDigits();
+    //check to see if a coin has been added to the slot?
+    if(digitalRead(COIN_SLOT) == HIGH){
+      gameMode = PLAY_MODE;
+      
+    }
+
   }
-
-
-  
 
 }
 
@@ -571,3 +601,88 @@ void Play_Titanic()
     noTone(BUZZER_PIN); //stop music on pin BUZZER_PIN 
     }
 }
+
+void Play_HB()
+{
+  int length = 28; // the number of notes
+
+  int tempo = 150;
+
+  char notes[] = "GGAGcB GGAGdc GGxecBA yyecdc";
+
+  int beats[] = { 2, 2, 8, 8, 8, 16, 1, 2, 2, 8, 8,8, 16, 1, 2,2,8,8,8,8,16, 1,2,2,8,8,8,16 };
+
+  for (int i = 0; i < length; i++) 
+  {
+
+     if (notes[i] == ' ') {
+  
+       delay(beats[i] * tempo); // rest
+  
+     } else {
+  
+       playHBNote(notes[i], beats[i] * tempo);
+  
+     }
+
+     // pause between notes
+    if(gameMode == PLAY_MODE)
+    {
+          return;
+    }
+     delay(tempo);
+
+  }
+
+}
+
+void playHBTone(int tone, int duration) 
+{
+
+  for (long i = 0; i < duration * 1000L; i += tone * 2) 
+  {
+  
+     digitalWrite(BUZZER_PIN, HIGH);
+  
+     delayMicroseconds(tone);
+  
+     digitalWrite(BUZZER_PIN, LOW);
+  
+     delayMicroseconds(tone);
+  
+  }
+
+}
+
+void playHBNote(char note, int duration) 
+{
+
+  char names[] = {'C', 'D', 'E', 'F', 'G', 'A', 'B',           
+  
+                   'c', 'd', 'e', 'f', 'g', 'a', 'b',
+  
+                   'x', 'y' };
+
+  int tones[] = { 1915, 1700, 1519, 1432, 1275, 1136, 1014,
+  
+                   956,  834,  765,  593,  468,  346,  224,
+  
+                   655 , 715 };
+
+  int SPEE = 5;
+
+  // play the tone corresponding to the note name
+  
+  for (int i = 0; i < 17; i++) {
+  
+     if (names[i] == note) 
+     {
+        int newduration = duration/SPEE;
+        playHBTone(tones[i], newduration);
+        
+     }
+  
+  }
+
+}
+
